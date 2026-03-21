@@ -418,7 +418,7 @@ module.exports = exports = (log, loga, argv) ->
               console.log "argv.allowed_ids exists, but there was an error. Make sure it's value is an array in your config."
         false
 
-      app.all '*', (req, res, next) ->
+      app.all '*splat', (req, res, next) ->
         # don't protect site flag,
         return next() if req.url is '/favicon.png'
         return next() unless /\.(json|html)$/.test req.url
