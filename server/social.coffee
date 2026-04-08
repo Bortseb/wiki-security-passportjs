@@ -15,7 +15,8 @@ https = require 'https'
 url = require 'url'
 
 _ = require 'lodash'
-glob = require 'glob'
+
+{ jwtDecode } = require('jwt-decode');
 
 passport = require('passport')
 
@@ -163,14 +164,12 @@ module.exports = exports = (log, loga, argv) ->
       oauth2StrategyName = callbackHost + 'OAuth'
 
       if argv.oauth2_UserInfoURL?
-        OAuth2Strategy::userProfile = (accesstoken, done) -> 
-          console.log "hello"
-          console.log accesstoken
+        OAuth2Strategy::userProfile = (accesstoken, done) ->
           @_oauth2._request "GET", argv.oauth2_UserInfoURL, null, null, accesstoken, (err, data) ->
             if err
-              return done err 
+              return done err
             try
-              data = JSON.parse data 
+              data = JSON.parse data
             catch e
               return done e
             done(null, data)
@@ -185,6 +184,8 @@ module.exports = exports = (log, loga, argv) ->
         userInfoURL: argv.oauth2_UserInfoURL
         }, (accessToken, refreshToken, params, profile, cb) ->
 
+          token = jwtDecode(accessToken)
+
           extractUserInfo = (uiParam, uiDef) ->
             uiPath = ''
             if typeof uiParam == 'undefined' then (uiPath = uiDef) else (uiPath = uiParam)
@@ -192,6 +193,8 @@ module.exports = exports = (log, loga, argv) ->
             sParts = uiPath.split('.')
             sFrom = sParts.shift()
             switch sFrom
+              when "token"
+                obj = token
               when "params"
                 obj = params
               when "profile"
@@ -199,18 +202,14 @@ module.exports = exports = (log, loga, argv) ->
               else
                 console.error('*** source of user info not recognised', uiPath)
                 obj = {}
-            
+
             while (sParts.length)
               obj = obj[sParts.shift()]
             return obj
 
-          console.log("accessToken", accessToken)
-          console.log("refreshToken", refreshToken)
-          console.log("params", params)
-          console.log("profile", profile)
           if argv.oauth2_UsernameField?
-            username_query = argv.oauth2_UsernameField 
-          else 
+            username_query = argv.oauth2_UsernameField
+          else
             username_query = 'params.user_id'
 
           try
@@ -283,7 +282,7 @@ module.exports = exports = (log, loga, argv) ->
         clientSecret: argv.google_clientSecret
         callbackURL: callbackProtocol + '//' + callbackHost + '/auth/google/callback'
         }, (accessToken, refreshToken, profile, cb) ->
-          user = { google: { 
+          user = { google: {
             id: profile.id
             displayName: profile.displayName
             emails: profile.emails
@@ -336,7 +335,14 @@ module.exports = exports = (log, loga, argv) ->
       schemeButtons = []
       _(ids).forEach (scheme) ->
         switch scheme
-          when "oauth2" then schemeButtons.push({button: "<a href='/auth/oauth2' class='scheme-button oauth2-button'><span>OAuth2</span></a>"})
+          when "oauth2"
+            schemeButtons.push({button: "<a href='/auth/oauth2' id='oauth2' class='scheme-button oauth2-button'><span>OAuth2</span></a>
+              <script>
+                oauth2Button = document.getElementById('oauth2');
+                oauth2Button.onclick = function(event) {
+                  window.resizeBy(0, +300);
+                }
+              </script>"})
           when "twitter" then schemeButtons.push({button: "<a href='/auth/twitter' class='scheme-button twitter-button'><span>Twitter</span></a>"})
           when "github" then schemeButtons.push({button: "<a href='/auth/github' class='scheme-button github-button'><span>Github</span></a>"})
           when "google"
@@ -412,7 +418,7 @@ module.exports = exports = (log, loga, argv) ->
               console.log "argv.allowed_ids exists, but there was an error. Make sure it's value is an array in your config."
         false
 
-      app.all '*', (req, res, next) ->
+      app.all '*splat', (req, res, next) ->
         # don't protect site flag,
         return next() if req.url is '/favicon.png'
         return next() unless /\.(json|html)$/.test req.url
